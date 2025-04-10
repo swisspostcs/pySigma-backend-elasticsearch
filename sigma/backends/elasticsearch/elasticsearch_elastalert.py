@@ -47,8 +47,8 @@ class ElastalertBackend(LuceneBackend):
         "default": "{search}\n{aggregate}\n{condition}"
     }
 
-    query_expression: ClassVar[str] = '"{query}"'
-    correlation_search_single_rule_expression: ClassVar[str] = '{query}'
+    #query_expression: ClassVar[str] = '"{query}"'
+    correlation_search_single_rule_expression: ClassVar[str] = '"{query}"'
     correlation_condition_mapping: ClassVar[Dict[str, str]] = {
         SigmaCorrelationConditionOperator.GT: "max_threshold",
         SigmaCorrelationConditionOperator.LT: "min_threshold",
