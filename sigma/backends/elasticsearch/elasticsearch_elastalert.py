@@ -161,6 +161,7 @@ class ElastalertBackend(LuceneBackend):
         query_split = query.split("\n")
         query_str = query_split.pop(0)
         test = YAML.load( "\n".join(query_split), Loader=YAML.Loader)
+
         elastalert_rule = {
             "description": rule.description if rule.description else "",
             "name": rule.title if rule.title else "",
@@ -177,7 +178,8 @@ class ElastalertBackend(LuceneBackend):
             "priority": self.severity_risk_mapping[rule.level.name] if rule.level is not None else 1,
         }
 
-        elastalert_rule.update(test)
+        if test:
+            elastalert_rule.update(test)
 
         if not isinstance(rule, SigmaCorrelationRule):
             elastalert_rule["type"] = "any"
