@@ -9,6 +9,9 @@ from sigma.correlations import SigmaCorrelationRule, SigmaCorrelationTimespan
 from sigma.exceptions import SigmaFeatureNotSupportedByBackendError
 from sigma.backends.elasticsearch.elasticsearch_lucene import LuceneBackend
 
+import json
+
+import yaml as YAML
 
 class ElastalertBackend(LuceneBackend):
     """
@@ -166,7 +169,7 @@ class ElastalertBackend(LuceneBackend):
             "filter:\n"
             "- query:\n"
             "    query_string:\n"
-            f"      query: {query}\n"
+            f"      query: \"{query}\"\n"
             f"{alert_type}"
             f"priority: {self.severity_risk_mapping[rule.level.name] if rule.level is not None else 1}"
         )
