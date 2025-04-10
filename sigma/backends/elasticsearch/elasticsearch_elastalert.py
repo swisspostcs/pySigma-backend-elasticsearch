@@ -47,7 +47,7 @@ class ElastalertBackend(LuceneBackend):
         "default": "{search}\n{aggregate}\n{condition}"
     }
 
-    correlation_search_single_rule_expression: ClassVar[str] = "{query}"
+    correlation_search_single_rule_expression: ClassVar[str] = '"{query}"'
     correlation_condition_mapping: ClassVar[Dict[str, str]] = {
         SigmaCorrelationConditionOperator.GT: "max_threshold",
         SigmaCorrelationConditionOperator.LT: "min_threshold",
@@ -158,41 +158,39 @@ class ElastalertBackend(LuceneBackend):
     def finalize_query_default(
         self, rule: SigmaRule, query: str, index: int, state: ConversionState
     ) -> str:
-        # alert_type = "type: any\n" if not isinstance(rule, SigmaCorrelationRule) else ""
+        alert_type = "type: any\n" if not isinstance(rule, SigmaCorrelationRule) else ""
 
-        # return (
-        #     f"description: {rule.description if rule.description else ''}\n"
-        #     f"name: {rule.title if rule.title else ''}\n"
-        #     f"index: \"{state.processing_state['index']}\"\n"
-        #     "filter:\n"
-        #     "- query:\n"
-        #     "    query_string:\n"
-        #     f"      query: \"{query}\"\n"
-        #     f"{alert_type}"
-        #     f"priority: {self.severity_risk_mapping[rule.level.name] if rule.level is not None else 1}"
-        # )
-        elastalert_rule = {
-            "description": rule.description if rule.description else "",
-            "name": rule.title if rule.title else "",
-            "index": state.processing_state["index"],
-            "filter": [
-                {
-                    "query": {
-                        "query_string": {
-                            "query": query,
-                        }
-                    }
-                }
-            ],
-            "priority": self.severity_risk_mapping[rule.level.name]
-            if rule.level is not None
-            else 1,
-        }
+        return (
+            f"description: {rule.description if rule.description else ''}\n"
+            f"name: {rule.title if rule.title else ''}\n"
+            f"index: \"{state.processing_state['index']}\"\n"
+            "filter:\n"
+            "- query:\n"
+            "    query_string:\n"
+            f"      query: {query}\n"
+            f"{alert_type}"
+            f"priority: {self.severity_risk_mapping[rule.level.name] if rule.level is not None else 1}"
+        )
+        # elastalert_rule = {
+        #     "description": rule.description if rule.description else "",
+        #     "name": rule.title if rule.title else "",
+        #     "index": state.processing_state["index"],
+        #     "filter": [
+        #         {
+        #             "query": {
+        #                 "query_string": {
+        #                     "query": query,
+        #                 }
+        #             }
+        #         }
+        #     ],
+        #     "priority": self.severity_risk_mapping[rule.level.name] if rule.level is not None else 1,
+        # }
 
-        if not isinstance(rule, SigmaCorrelationRule):
-            elastalert_rule["type"] = "any"
+        # if not isinstance(rule, SigmaCorrelationRule):
+        #     elastalert_rule["type"] = "any"
 
-        return YAML.dump(elastalert_rule)
+        # return YAML.dump(elastalert_rule)
 
     def finalize_output_default(self, queries: List[str]) -> List[str]:
         return list(queries)
