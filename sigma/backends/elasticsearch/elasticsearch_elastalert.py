@@ -5,10 +5,9 @@ from sigma.conversion.state import ConversionState
 from sigma.conversion.deferred import DeferredQueryExpression
 from sigma.processing.pipeline import ProcessingPipeline
 from sigma.correlations import SigmaCorrelationConditionOperator
-from sigma.correlations import SigmaCorrelationRule, SigmaCorrelationTimespan
+from sigma.correlations import SigmaCorrelationRule
 from sigma.exceptions import SigmaFeatureNotSupportedByBackendError
 from sigma.backends.elasticsearch.elasticsearch_lucene import LuceneBackend
-from sigma.exceptions import SigmaConversionError
 
 import yaml as YAML
 
