@@ -8,6 +8,7 @@ from sigma.correlations import SigmaCorrelationConditionOperator
 from sigma.correlations import SigmaCorrelationRule, SigmaCorrelationTimespan
 from sigma.exceptions import SigmaFeatureNotSupportedByBackendError
 from sigma.backends.elasticsearch.elasticsearch_lucene import LuceneBackend
+from sigma.exceptions import SigmaConversionError
 
 import yaml as YAML
 
@@ -43,37 +44,11 @@ class ElastalertBackend(LuceneBackend):
     correlation_methods: ClassVar[Dict[str, str]] = {
         "default": "Elastalert correlation rule",
     }
-    default_correlation_query: ClassVar[Dict[str, str]] = {
-        "default": "{search}\n{aggregate}\n{condition}"
-    }
 
     correlation_search_single_rule_expression: ClassVar[str] = "{query}"
     correlation_condition_mapping: ClassVar[Dict[str, str]] = {
         SigmaCorrelationConditionOperator.GT: "max_threshold",
         SigmaCorrelationConditionOperator.LT: "min_threshold",
-    }
-
-    event_count_aggregation_expression: ClassVar[Dict[str, str]] = {
-        "default": "timeframe:\n  {timespan}\n{groupby}"
-    }
-    value_count_aggregation_expression: ClassVar[Dict[str, str]] = {
-        "default": "buffer_time:\n  {timespan}\n{groupby}"
-    }
-
-    groupby_expression: ClassVar[Dict[str, str]] = {"default": "query_key:\n{fields}"}
-    groupby_field_expression: ClassVar[Dict[str, str]] = {"default": "- {field}"}
-    groupby_field_expression_joiner: ClassVar[Dict[str, str]] = {"default": "\n"}
-
-    event_count_condition_expression: ClassVar[Dict[str, str]] = {
-        "default": "num_events: {count}\ntype: frequency"
-    }
-    value_count_condition_expression: ClassVar[Dict[str, str]] = {
-        "default": (
-            "metric_agg_type: cardinality\n"
-            "metric_agg_key: {field}\n"
-            "{op}: {count}\n"
-            "type: metric_aggregation"
-        )
     }
 
     def __init__(
@@ -103,14 +78,44 @@ class ElastalertBackend(LuceneBackend):
 
         return super().convert_correlation_search(rule, **kwargs)
 
-    def convert_timespan(
-        self,
-        timespan: SigmaCorrelationTimespan,
-        output_format: Optional[str] = None,
-        method: Optional[str] = None,
-    ) -> str:
-        return f"{self.timespan_mapping[timespan.unit]}: {timespan.count}"
+    def convert_correlation_rule_from_template(self, rule, correlation_type, method):
+        elastalert_rule = {
+            "filter": [
+                {
+                    "query": {
+                        "query_string": {
+                            "query": self.convert_correlation_search(rule),
+                        }
+                    }
+                }
+            ],
+        }
 
+        if rule.group_by:
+            elastalert_rule["query_key"] = rule.group_by
+
+        return [elastalert_rule]
+
+    def convert_correlation_event_count_rule(self, rule, output_format = None, method = None):
+        elastalert_rule = super().convert_correlation_event_count_rule(rule, output_format, method)
+        elastalert_rule[0].update({
+            "timeframe": {self.timespan_mapping[rule.timespan.unit]: rule.timespan.count},
+            "num_events": rule.condition.count,
+            "type": "frequency",
+        })
+        return elastalert_rule
+    
+    def convert_correlation_value_count_rule(self, rule, output_format = None, method = None):
+        elastalert_rule = super().convert_correlation_value_count_rule(rule, output_format, method)
+        elastalert_rule[0].update({
+            "metric_agg_type": "cardinality",
+            "metric_agg_key": rule.condition.fieldref,
+            "buffer_time": {self.timespan_mapping[rule.timespan.unit]: rule.timespan.count},
+            self.correlation_condition_mapping[rule.condition.op]: rule.condition.count,
+            "type": "metric_aggregation",
+        })
+        return elastalert_rule
+    
     def preprocess_indices(self, indices: List[str]) -> str:
         if not indices:
             return self.state_defaults["index"]
@@ -151,40 +156,28 @@ class ElastalertBackend(LuceneBackend):
         if not isinstance(index_state, str):
             index_state = self.preprocess_indices(index_state)
 
-        # Save the processed index back to the processing state
-        state.processing_state["index"] = index_state
-        return super().finalize_query(rule, query, index, state, output_format)
-
-    def finalize_query_default(
-        self, rule: SigmaRule, query: str, index: int, state: ConversionState
-    ) -> str:
-        query_split = query.split("\n")
-        query_str = query_split.pop(0)
-        test = YAML.load( "\n".join(query_split), Loader=YAML.Loader)
-
-        elastalert_rule = {
-            "description": rule.description if rule.description else "",
-            "name": rule.title if rule.title else "",
-            "index": state.processing_state["index"],
-            "filter": [
-                {
-                    "query": {
-                        "query_string": {
-                            "query": query_str,
+        if not isinstance(rule, SigmaCorrelationRule):
+            query = {
+                "filter": [
+                    {
+                        "query": {
+                            "query_string": {
+                                "query": query,
+                            }
                         }
                     }
-                }
-            ],
+                ],
+                "type": "any",
+            }
+
+        query.update({
+            "description": rule.description if rule.description else "",
+            "name": rule.title if rule.title else "",
+            "index": index_state,
             "priority": self.severity_risk_mapping[rule.level.name] if rule.level is not None else 1,
-        }
+        })
 
-        if test:
-            elastalert_rule.update(test)
-
-        if not isinstance(rule, SigmaCorrelationRule):
-            elastalert_rule["type"] = "any"
-
-        return YAML.dump(elastalert_rule)
+        return YAML.dump(query)
 
     def finalize_output_default(self, queries: List[str]) -> List[str]:
         return list(queries)
